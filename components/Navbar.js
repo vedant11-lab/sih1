@@ -1,23 +1,3 @@
-/**
- * Navigation Bar Component
- * 
- * This component provides the main navigation for the Alumni Platform.
- * It dynamically changes based on the user's authentication state.
- * 
- * Features:
- * - Real-time authentication state monitoring
- * - Conditional rendering based on login status
- * - User profile information display
- * - Sign out functionality
- * - Responsive design with hamburger menu for mobile
- * - Professional dropdown menu for authenticated users
- * - Links to different sections based on user role
- * 
- * States:
- * - Logged out: Shows Sign Up and Sign In links
- * - Logged in: Shows user dropdown with Dashboard and Sign Out options
- */
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -25,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Menu, X, User, LogOut, LayoutDashboard } from 'lucide-react'
 import { supabase } from '@/lib/supabase-client'
+import { getUserProfileClient } from '@/lib/profile-service'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -56,23 +37,7 @@ export default function Navbar() {
    * Get user profile data from the database
    */
   const getUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('full_name, role')
-        .eq('id', userId)
-        .single()
-
-      if (error) {
-        console.error('Error fetching profile:', error)
-        return null
-      }
-
-      return data
-    } catch (err) {
-      console.error('Profile fetch error:', err)
-      return null
-    }
+    return await getUserProfileClient(supabase, userId)
   }
 
   /**
@@ -145,7 +110,7 @@ export default function Navbar() {
    * Get dashboard link based on user role
    */
   const getDashboardLink = () => {
-    if (!profile?.role) return '/portal'
+    if (!profile?.role) return '/dashboard'
     
     switch (profile.role) {
       case 'ADMIN':
@@ -153,7 +118,7 @@ export default function Navbar() {
       case 'RECRUITER':
         return '/recruiter'
       default:
-        return '/portal'
+        return '/dashboard'
     }
   }
 

@@ -38,7 +38,7 @@ export default function AdminDashboard() {
 
       // Check if user is admin
       if (profileData?.role !== 'ADMIN') {
-        router.push('/portal')
+        router.push('/dashboard')
         return
       }
 
@@ -70,12 +70,24 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.push('/admin/verify-users')}>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                User Verification
+                <span className="text-sm bg-orange-100 text-orange-600 px-2 py-1 rounded-full">New</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600">Review and approve pending user registrations.</p>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>User Management</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600">Manage user accounts and permissions.</p>
+              <p className="text-gray-600">Manage existing user accounts and permissions.</p>
             </CardContent>
           </Card>
 

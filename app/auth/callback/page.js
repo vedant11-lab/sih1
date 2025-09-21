@@ -51,7 +51,8 @@ export default function AuthCallback() {
                 full_name: data.session.user.user_metadata?.full_name || 
                           data.session.user.user_metadata?.name || 
                           data.session.user.email,
-                role: 'STUDENT' // Default role for OAuth users
+                role: 'STUDENT', // Default role for OAuth users
+                status: 'APPROVED' // Auto-approve OAuth users
               })
 
             if (insertError) {
@@ -67,7 +68,7 @@ export default function AuthCallback() {
           } else if (profile?.role === 'RECRUITER') {
             router.push('/recruiter')
           } else {
-            router.push('/portal')
+            router.push('/dashboard')
           }
         } else {
           setStatus('No session found. Redirecting to sign in...')

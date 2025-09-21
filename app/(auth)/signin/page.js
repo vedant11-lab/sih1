@@ -8,7 +8,7 @@
  * - Google OAuth integration
  * - Remember me functionality
  * - Error handling and validation
- * - Automatic redirection to appropriate portal based on role
+ * - Automatic redirection to appropriate dashboard based on role
  * 
  * Security:
  * - Uses Supabase Auth for secure authentication
@@ -129,8 +129,8 @@ export default function SignInPage() {
         console.log('Redirecting to recruiter dashboard')
         router.push('/recruiter')
       } else {
-        console.log('Redirecting to portal dashboard')
-        router.push('/portal')
+        console.log('Redirecting to dashboard')
+        router.push('/dashboard')
       }
 
     } catch (err) {

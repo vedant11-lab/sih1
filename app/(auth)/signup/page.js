@@ -1,21 +1,3 @@
-/**
- * User Sign-Up Page Component
- * 
- * This page allows new users to create an account on the Alumni Platform.
- * 
- * Features:
- * - Full name, email, and password registration
- * - Role selection (Student, Alumnus, Recruiter)
- * - Automatic profile creation in database
- * - Input validation and error handling
- * - Redirects to appropriate portal after successful signup
- * 
- * Security:
- * - Uses Supabase Auth for secure password handling
- * - Automatically creates profile record with user metadata
- * - Role-based access control through database constraints
- */
-
 'use client'
 
 import { useState } from 'react'
@@ -130,14 +112,17 @@ export default function SignUpPage() {
 
       console.log('User created successfully:', authData.user.id)
 
-      // Step 2: The profile will be automatically created by our database trigger
-      // But let's also explicitly create it to ensure it exists
+      // Step 2: Create profile with appropriate status based on role
+      // Students are auto-approved, other roles need admin verification
+      const userStatus = formData.role === 'STUDENT' ? 'APPROVED' : 'PENDING'
+      
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
           id: authData.user.id,
           full_name: formData.fullName,
-          role: formData.role
+          role: formData.role,
+          status: userStatus
         }, {
           onConflict: 'id'
         })
@@ -146,10 +131,15 @@ export default function SignUpPage() {
         console.warn('Profile creation warning:', profileError.message)
         // Don't throw error here as the trigger should handle it
       } else {
-        console.log('Profile created successfully')
+        console.log('Profile created successfully with status:', userStatus)
       }
 
-      setSuccess('Account created successfully! Please check your email to verify your account.')
+      // Show different success messages based on status
+      if (userStatus === 'APPROVED') {
+        setSuccess('Account created successfully! Please check your email to verify your account.')
+      } else {
+        setSuccess('Account created successfully! Your account is pending admin approval. You will receive an email once approved.')
+      }
       
       // Redirect after 2 seconds
       setTimeout(() => {

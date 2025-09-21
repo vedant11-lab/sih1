@@ -38,7 +38,7 @@ export default function RecruiterDashboard() {
 
       // Check if user is recruiter
       if (profileData?.role !== 'RECRUITER') {
-        router.push('/portal')
+        router.push('/dashboard')
         return
       }
 
