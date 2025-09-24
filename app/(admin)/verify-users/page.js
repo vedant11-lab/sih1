@@ -61,7 +61,7 @@ async function getCurrentUserProfile(supabase) {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name, role, status')
+      .select('id, name, role, status')
       .eq('id', user.id)
       .single()
 
@@ -84,7 +84,7 @@ async function getPendingUsers(supabase) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, role, created_at')
+      .select('id, name, role, created_at')
       .eq('status', 'PENDING')
       .order('created_at', { ascending: true })
 
@@ -132,8 +132,8 @@ function getRoleDisplayName(role) {
   switch (role) {
     case 'STUDENT':
       return 'Student'
-    case 'ALUMNUS':
-      return 'Alumnus'
+      case 'ALUMNUS': // legacy string; treat as ALUMNI
+        return 'Alumnus'
     case 'RECRUITER':
       return 'Recruiter'
     case 'ADMIN':
@@ -149,7 +149,8 @@ function getRoleDisplayName(role) {
 function getRoleBadgeVariant(role) {
   switch (role) {
     case 'ALUMNUS':
-      return 'default'
+      case 'ALUMNUS': // legacy ALUMNI
+        return 'primary'
     case 'RECRUITER':
       return 'secondary'
     case 'ADMIN':
@@ -230,7 +231,7 @@ export default async function VerifyUsersPage() {
                   {pendingUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
-                        {user.full_name || 'No name provided'}
+                        {user.name || 'No name provided'}
                       </TableCell>
                       <TableCell className="text-gray-600">
                         {/* Note: Email would need admin API access */}

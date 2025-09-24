@@ -44,12 +44,38 @@ export default function SignInPage() {
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        // User is already logged in, redirect to home
-        router.push('/')
+      if (!session?.user) return
+      let roleCandidate = session.user.user_metadata?.role
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: session.user.id, email: session.user.email, role: roleCandidate })
+        })
+        if (res.ok) {
+          const prof = await res.json()
+          // If API returned generic ALUMNI but metadata says STUDENT, prefer metadata
+          if (prof?.role) {
+            if ((prof.role === 'ALUMNI' || prof.role === 'ALUMNUS') && roleCandidate === 'STUDENT') {
+              roleCandidate = 'STUDENT'
+            } else {
+              roleCandidate = prof.role
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[signin precheck] profile ensure error', e)
       }
+  if (roleCandidate === 'ALUMNUS') roleCandidate = 'ALUMNI'
+  console.log('[signin precheck] resolved role', roleCandidate)
+  const allowed = ['ADMIN','STUDENT','RECRUITER','ALUMNI']
+  if (!allowed.includes(roleCandidate)) return // stay on signin; user can proceed manually
+  let dest = '/dashboard'
+  if (roleCandidate === 'ADMIN') dest = '/admin'
+  else if (roleCandidate === 'STUDENT') dest = '/student/dashboard'
+  else if (roleCandidate === 'RECRUITER') dest = '/recruiter'
+  router.replace(dest)
     }
-    
     checkAuth()
   }, [router])
 
@@ -82,62 +108,130 @@ export default function SignInPage() {
   }
 
   /**
-   * Handle email/password sign in
+   * Handle email/password sign in (hardened against stalls)
    */
   const handleEmailSignIn = async (e) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
     setLoading(true)
     setError('')
-    
     try {
-      console.log('Starting email signin...', { email: formData.email })
+      console.log('[signin] Starting email sign-in', { email: formData.email })
 
+      // Direct call without artificial timeout; Supabase SDK already has its own network handling
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password
       })
 
-      console.log('Auth signin result:', { data, authError })
+      if (authError) throw new Error(authError.message)
+      if (!data?.user) throw new Error('Sign in failed (no user)')
 
-      if (authError) {
-        throw new Error(authError.message)
+      const user = data.user
+      console.log('[signin] Auth success', { userId: user.id })
+
+      // Fire off profile ensure in parallel; don't let it block navigation entirely
+      const ensureProfile = async () => {
+        try {
+          const metaRole = user?.user_metadata?.role
+          const res = await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, email: user.email, role: metaRole })
+          })
+          if (!res.ok) throw new Error('ensure profile api failed ' + res.status)
+          return res.json()
+        } catch (err) {
+          console.warn('[signin] ensure profile failed (non-fatal)', err)
+          return null
+        }
       }
 
-      if (!data.user) {
-        throw new Error('Sign in failed')
+      const fetchRole = async () => {
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle()
+          if (profileError) throw profileError
+          return profile?.role || null
+        } catch (err) {
+          console.warn('[signin] role fetch failed (will fallback)', err)
+          return null
+        }
       }
 
-      console.log('User signed in successfully:', data.user.id)
+      // Perform in parallel; role fetch should not block for more than 8s, but rather than time out throw, we just ignore if slow
+      let role = null
+      let profileResponse = null
+      try {
+        ;[profileResponse, role] = await Promise.all([
+          ensureProfile(),
+          (async () => {
+            try { return await fetchRole() } catch { return null } 
+          })()
+        ])
+      } catch (parErr) {
+        console.warn('[signin] parallel profile tasks issue (continuing)', parErr)
+      }
 
-      // Get user profile to determine redirect destination
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
+      // Normalize legacy role label ALUMNUS -> ALUMNI
+      // Prefer role from profile; fall back to user metadata if profile defaulted
+      let metaRole = data.user?.user_metadata?.role
+      let derivedRole = (role || profileResponse?.profile?.role || metaRole || 'ALUMNI')
+      // If profile gave generic ALUMNI but metadata has a more specific STUDENT/RECRUITER/ADMIN, use metadata
+      if ((derivedRole === 'ALUMNI' || derivedRole === 'ALUMNUS') && metaRole && metaRole !== 'ALUMNUS' && metaRole !== 'ALUMNI') {
+        derivedRole = metaRole
+      }
+      if (derivedRole === 'ALUMNUS') derivedRole = 'ALUMNI'
+      console.log('[signin] Derived role', { derivedRole })
+  // Sync auth metadata to keep future precheck accurate (best effort)
+  try { await supabase.auth.updateUser({ data: { role: derivedRole } }) } catch {}
 
-      console.log('Profile fetch result:', { profile, profileError })
+      // If a non-student account is still pending approval, block and force sign out with message
+      if (derivedRole !== 'STUDENT' && (profileResponse?.profile?.status === 'PENDING')) {
+        setError('Your account is pending admin approval. Please wait until it is approved.')
+        // Optional: sign out so protected routes don't load partial state
+        try { await supabase.auth.signOut() } catch {}
+        setLoading(false)
+        return
+      }
 
-      // Redirect based on user role
-      if (profile?.role === 'ADMIN') {
-        console.log('Redirecting to admin dashboard')
-        router.push('/admin')
-      } else if (profile?.role === 'RECRUITER') {
-        console.log('Redirecting to recruiter dashboard')
-        router.push('/recruiter')
-      } else {
-        console.log('Redirecting to dashboard')
-        router.push('/dashboard')
+      // Decide redirect path by role
+      let dest = '/dashboard'
+      switch (derivedRole) {
+        case 'ADMIN': dest = '/admin'; break
+        case 'RECRUITER': dest = '/recruiter'; break
+        case 'STUDENT': dest = '/student/dashboard'; break
+        default: dest = '/dashboard'
+      }
+
+      // Navigate; use replace to avoid back navigation to sign-in
+      try {
+        router.replace(dest)
+        console.log('[signin] Redirecting to', dest)
+      } catch (navErr) {
+        console.warn('[signin] Navigation error, showing manual link', navErr)
+        setError(`Signed in but could not redirect automatically. Go to your dashboard: ${dest}`)
       }
 
     } catch (err) {
-      console.error('Sign in error:', err)
-      setError(err.message || 'An error occurred during sign in')
+      console.error('[signin] Sign in error', err)
+      const msg = err?.message || 'An error occurred during sign in'
+      // Normalize some common messages
+      if (/timeout/i.test(msg)) {
+        setError('Network is slow or unreachable. Please check your connection and try again.')
+      } else if (/invalid login credentials/i.test(msg)) {
+        setError('Invalid email or password.')
+      } else {
+        setError(msg)
+      }
     } finally {
-      setLoading(false)
+      // Release loading; if navigation succeeded, component likely unmounted soon
+      setTimeout(() => setLoading(false), 250)
     }
   }
 

@@ -86,6 +86,10 @@ export default function Navbar() {
     
     try {
       const { error } = await supabase.auth.signOut()
+      // Hard fallback in case router cache keeps stale session
+      setTimeout(() => {
+        try { if (typeof window !== 'undefined') window.location.href = '/signin' } catch {}
+      }, 200)
       
       if (error) {
         console.error('Sign out error:', error)
@@ -111,14 +115,12 @@ export default function Navbar() {
    */
   const getDashboardLink = () => {
     if (!profile?.role) return '/dashboard'
-    
-    switch (profile.role) {
-      case 'ADMIN':
-        return '/admin'
-      case 'RECRUITER':
-        return '/recruiter'
-      default:
-        return '/dashboard'
+    const role = profile.role === 'ALUMNUS' ? 'ALUMNI' : profile.role
+    switch (role) {
+      case 'ADMIN': return '/admin'
+      case 'RECRUITER': return '/recruiter'
+      case 'STUDENT': return '/student/dashboard'
+      default: return '/dashboard'
     }
   }
 
@@ -129,7 +131,7 @@ export default function Navbar() {
     switch (role) {
       case 'STUDENT':
         return 'Student'
-      case 'ALUMNUS':
+      case 'ALUMNUS': // legacy value in older rows; treat as ALUMNI
         return 'Alumnus'
       case 'RECRUITER':
         return 'Recruiter'
@@ -166,7 +168,7 @@ export default function Navbar() {
   const UserAvatar = ({ className = "" }) => (
     <div className={`w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-sm ${className}`}>
       <span className="text-white text-sm font-medium">
-        {(profile?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
+        {(profile?.name || user?.email || 'U').charAt(0).toUpperCase()}
       </span>
     </div>
   )
@@ -182,7 +184,7 @@ export default function Navbar() {
             <UserAvatar />
             <div>
               <div className="text-sm font-medium text-gray-900">
-                {profile?.full_name || user.email}
+                {profile?.name || user.email}
               </div>
               {profile?.role && (
                 <div className="text-xs text-gray-500">
@@ -262,7 +264,7 @@ export default function Navbar() {
                       <UserAvatar />
                       <div className="text-left">
                         <div className="text-sm font-medium text-gray-900">
-                          {profile?.full_name || user.email}
+                          {profile?.name || user.email}
                         </div>
                         {profile?.role && (
                           <div className="text-xs text-gray-500">
@@ -277,7 +279,7 @@ export default function Navbar() {
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">
-                        {profile?.full_name || 'User'}
+                        {profile?.name || 'User'}
                       </p>
                       <p className="text-xs leading-none text-muted-foreground">
                         {user.email}

@@ -65,7 +65,7 @@ export default function RecruiterDashboard() {
             Recruiter Dashboard
           </h1>
           <p className="text-gray-600">
-            Welcome, {profile?.full_name} - Connect with top talent
+            Welcome, {profile?.name} - Connect with top talent
           </p>
         </div>
 

@@ -65,7 +65,7 @@ export default function AdminDashboard() {
             Admin Dashboard
           </h1>
           <p className="text-gray-600">
-            Welcome, {profile?.full_name} - Manage the Alumni Platform
+            Welcome, {profile?.name} - Manage the Alumni Platform
           </p>
         </div>
 

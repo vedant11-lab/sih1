@@ -88,13 +88,14 @@ export default function SignUpPage() {
     try {
       console.log('Starting signup process...', { email: formData.email, role: formData.role })
 
-      // Step 1: Create user account with Supabase Auth
+      // Step 1: Create user account with Supabase Auth (no email confirmation)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
+          emailRedirectTo: undefined, // Disable email confirmation
           data: {
-            full_name: formData.fullName,
+            name: formData.fullName,
             role: formData.role
           }
         }
@@ -112,39 +113,35 @@ export default function SignUpPage() {
 
       console.log('User created successfully:', authData.user.id)
 
-      // Step 2: Create profile with appropriate status based on role
-      // Students are auto-approved, other roles need admin verification
-      const userStatus = formData.role === 'STUDENT' ? 'APPROVED' : 'PENDING'
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: authData.user.id,
-          full_name: formData.fullName,
-          role: formData.role,
-          status: userStatus
-        }, {
-          onConflict: 'id'
+      // Step 2: Call profile ensure API with selected role so it persists
+      const profileRes = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: authData.user.id,
+            email: formData.email,
+            role: formData.role
         })
-
-      if (profileError) {
-        console.warn('Profile creation warning:', profileError.message)
-        // Don't throw error here as the trigger should handle it
+      })
+      let createdProfile = null
+      if (profileRes.ok) {
+        createdProfile = await profileRes.json()
+        console.log('Profile ensure success:', createdProfile)
       } else {
-        console.log('Profile created successfully with status:', userStatus)
+        console.warn('Profile ensure failed (continuing sign up)')
       }
 
-      // Show different success messages based on status
-      if (userStatus === 'APPROVED') {
-        setSuccess('Account created successfully! Please check your email to verify your account.')
-      } else {
-        setSuccess('Account created successfully! Your account is pending admin approval. You will receive an email once approved.')
-      }
+      const userStatus = createdProfile?.status || (formData.role === 'STUDENT' ? 'APPROVED' : 'PENDING')
+
+      // Show success message based on resulting status
+      setSuccess(userStatus === 'APPROVED'
+        ? 'Account created successfully! You can now sign in.'
+        : 'Account created successfully! Your account is pending admin approval.')
       
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        router.push('/signin')
-      }, 2000)
+      // Force sign-out to ensure fresh role-based login (avoids stale session role)
+      try { await supabase.auth.signOut() } catch {}
+      // Redirect after short delay for UX
+      setTimeout(() => { router.push('/signin') }, 1200)
 
     } catch (err) {
       console.error('Sign up error:', err)
@@ -221,13 +218,11 @@ export default function SignUpPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="STUDENT">Student</SelectItem>
-                  <SelectItem value="ALUMNUS">Alumnus</SelectItem>
-                  <SelectItem value="RECRUITER">Recruiter</SelectItem>
+                  <SelectItem value="ALUMNI">Alumnus</SelectItem>
+                  <SelectItem value="ADMIN">Admin (University Head)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Error Message */}
             {error && (
               <div className="text-red-600 text-sm bg-red-50 p-3 rounded-md border border-red-200">
                 {error}

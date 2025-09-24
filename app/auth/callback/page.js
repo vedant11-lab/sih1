@@ -40,7 +40,7 @@ export default function AuthCallback() {
             .from('profiles')
             .select('role')
             .eq('id', data.session.user.id)
-            .single()
+            .maybeSingle()
 
           if (profileError || !profile) {
             // Create a basic profile for OAuth users
@@ -48,10 +48,11 @@ export default function AuthCallback() {
               .from('profiles')
               .insert({
                 id: data.session.user.id,
-                full_name: data.session.user.user_metadata?.full_name || 
-                          data.session.user.user_metadata?.name || 
-                          data.session.user.email,
-                role: 'STUDENT', // Default role for OAuth users
+                email: data.session.user.email,
+                name: data.session.user.user_metadata?.full_name || 
+                      data.session.user.user_metadata?.name || 
+                      data.session.user.email?.split('@')[0],
+                role: 'ALUMNI', // Default role for OAuth users
                 status: 'APPROVED' // Auto-approve OAuth users
               })
 
